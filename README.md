@@ -87,7 +87,57 @@ or (b) (if you choose) ends on high-entropy “random” data — your call via 
 
 
 
-# HOW TO RUN:
+# How To Run (First Time Setup):
+
+First run (no dependencies yet)
+
+Debian / Ubuntu / Kali:
+
+chmod +x afdw.sh\
+sudo ./afdw.sh --install-deps --doctor\
+sudo ./afdw.sh\
+
+This gives permissions, installs dependencies, checks that all functions will work.
+
+Just testing the flow without formatting?\
+sudo ./afdw.sh --no-format
+
+
+Other distros (quick hints)
+
+1. Show what’s missing (no disk prompts, no writes):
+
+sudo ./afdw.sh --doctor
+
+2. Install the basics with your package manager:
+
+Fedora/RHEL/CentOS:
+
+sudo dnf install -y coreutils util-linux openssl parted exfatprogs
+
+Arch/Manjaro:
+
+sudo pacman -S --needed coreutils util-linux openssl parted exfatprogs
+
+openSUSE:
+
+sudo zypper install -y coreutils util-linux openssl parted exfatprogs
+
+(Optional but nice): blkdiscard udisksctl partx kpartx
+
+
+
+# Gotchas
+
+Run as **root** (the script enforces it).\
+**WSL/containers** are blocked on purpose (unsafe for raw disks).\
+Use **doctor mode** anytime to check the environment:
+
+sudo ./afdw.sh --doctor
+
+
+
+# How To Run (After Initial Setup):
 
 Run it in guided mode (most common) and follow the prompts:\
 sudo ./afdw.sh
