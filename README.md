@@ -94,20 +94,20 @@ First run (no dependencies yet)
 Debian / Ubuntu / Kali:
 
 chmod +x afdw.sh\
-sudo ./afdw.sh --install-deps --doctor\
-sudo ./afdw.sh\
+sudo bash ./afdw.sh --install-deps --doctor\
+sudo bash ./afdw.sh\
 
 This gives permissions, installs dependencies, checks that all functions will work.
 
 Just testing the flow without formatting?\
-sudo ./afdw.sh --no-format
+sudo bash ./afdw.sh --no-format
 
 
 Other distros (quick hints)
 
 1. Show what’s missing (no disk prompts, no writes):
 
-sudo ./afdw.sh --doctor
+sudo bash ./afdw.sh --doctor
 
 2. Install the basics with your package manager:
 
@@ -131,9 +131,10 @@ sudo zypper install -y coreutils util-linux openssl parted exfatprogs
 
 Run as **root** (the script enforces it).\
 **WSL/containers** are blocked on purpose (unsafe for raw disks).\
+Make sure you run with **bash** i.e. sudo bash ./afdw.sh and **NOT** with /bin/sh i.e. sudo ./afdw.sh\
 Use **doctor mode** anytime to check the environment:
 
-sudo ./afdw.sh --doctor
+sudo bash ./afdw.sh --doctor
 
 
 
