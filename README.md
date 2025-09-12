@@ -141,30 +141,30 @@ sudo bash ./afdw.sh --doctor
 # How To Run (After Initial Setup):
 
 Run it in guided mode (most common) and follow the prompts:\
-sudo ./afdw.sh
+sudo bash ./afdw.sh
 
 Run it in batch mode with explicit confirmation:\
-sudo ./afdw.sh --device /dev/sdX --non-interactive --erase-confirm ERASE
+sudo bash ./afdw.sh --device /dev/sdX --non-interactive --erase-confirm ERASE
 
 Fast method for drives without TRIM/DISCARD:\
-sudo ./afdw.sh --device /dev/sdX --fast
+sudo bash ./afdw.sh --device /dev/sdX --fast
 
 
 Why you might want each mode:
 
 Factory-fresh look (common)\
 Use --fast on media without DISCARD to skip the noise pass (cuts time ~in half), then format + verify.\
-sudo ./afdw.sh --device /dev/sdX --fast
+sudo bash ./afdw.sh --device /dev/sdX --fast
 
 Randomized final surface (entropy on disk)\
 Use --noise-only --no-format to end on high-entropy data and stop there.\
-sudo ./afdw.sh --device /dev/sdX --noise-only --no-format
+sudo bash ./afdw.sh --device /dev/sdX --noise-only --no-format
 
 One quick zero pass, nothing else\
 sudo ./afdw.sh --device /dev/sdX --zero-only --no-format
 
 Skip wipes; just partition + format + verify\
-sudo ./afdw.sh --device /dev/sdX --skip-wipe
+sudo bash ./afdw.sh --device /dev/sdX --skip-wipe
 
 
 
@@ -246,7 +246,7 @@ json\
 # Requirements:
 
 Linux + Bash 4+\
-Must run as root: `sudo ./afdw.sh`\
+Must run as root: `sudo bash ./afdw.sh`\
 Tools you’ll need on PATH:
 
 required: lsblk dd openssl parted blkid uuidgen blockdev grep awk sed tr wc hexdump\
