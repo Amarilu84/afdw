@@ -6,16 +6,18 @@
 
   <!-- Latest release badge -->
   <a href="https://github.com/Amarilu84/afdw-secure-drive-wiper/releases">
-    <img src="https://img.shields.io/github/v/release/Amarilu84/afdw-secure-drive-wiper?color=blue&label=Latest%20Release&logo=github" alt="Latest Release">
+    <img src="https://img.shields.io/github/v/release/Amarilu84/afdw-secure-drive-wiper?style=for-the-badge&color=blue&logo=github" alt="Latest Release">
   </a>
-  
+  &nbsp; <!-- spacer -->
+
   <!-- License badge -->
   <a href="https://github.com/Amarilu84/afdw-secure-drive-wiper/blob/main/LICENSE">
-    <img src="https://img.shields.io/github/license/Amarilu84/afdw-secure-drive-wiper?color=green" alt="License">
+    <img src="https://img.shields.io/github/license/Amarilu84/afdw-secure-drive-wiper?style=for-the-badge&color=green" alt="License">
   </a>
-  
+  &nbsp;
+
   <!-- Shell language badge -->
-  <img src="https://img.shields.io/badge/Shell-Bash-blue?logo=gnu-bash" alt="Shell: Bash">
+  <img src="https://img.shields.io/badge/Shell-Bash-blue?style=for-the-badge&logo=gnu-bash" alt="Shell: Bash">
 
 </p>
 
