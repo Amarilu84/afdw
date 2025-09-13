@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/d14505a3-da8f-4af3-a09c-16d775c2bdb1" alt="AFDW Screenshot">
+</p>
+
 AFDW — The "Anti-Forensic Drive Wiper"
 Securely wipes most drives with the intent of shredded data being unrecoverable
 by extreme methods up to and including national security/government forensic LABs
