@@ -2,6 +2,23 @@
   <img src="https://github.com/user-attachments/assets/d14505a3-da8f-4af3-a09c-16d775c2bdb1" alt="AFDW Screenshot">
 </p>
 
+<p align="center">
+
+  <!-- Latest release badge -->
+  <a href="https://github.com/Amarilu84/afdw-secure-drive-wiper/releases">
+    <img src="https://img.shields.io/github/v/release/Amarilu84/afdw-secure-drive-wiper?color=blue&label=Latest%20Release&logo=github" alt="Latest Release">
+  </a>
+  
+  <!-- License badge -->
+  <a href="https://github.com/Amarilu84/afdw-secure-drive-wiper/blob/main/LICENSE">
+    <img src="https://img.shields.io/github/license/Amarilu84/afdw-secure-drive-wiper?color=green" alt="License">
+  </a>
+  
+  <!-- Shell language badge -->
+  <img src="https://img.shields.io/badge/Shell-Bash-blue?logo=gnu-bash" alt="Shell: Bash">
+
+</p>
+
 AFDW — The "Anti-Forensic Drive Wiper"
 Securely wipes most drives with the intent of shredded data being unrecoverable
 by extreme methods up to and including national security/government forensic LABs
