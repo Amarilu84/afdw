@@ -22,17 +22,19 @@
 </p>
 
 AFDW — The "Anti-Forensic Drive Wiper"
-Securely wipes most drives with the intent of shredded data being unrecoverable
-by extreme methods up to and including national security/government forensic LABs
+Securely wipes most drives with the intent of shredding data beyond recovery and leaving no trace of wipe signatures
+even by extreme methods up to and including national security/government forensic LABs.
 
 
-This script was written initially to automate the procedure I had come up with when
-erasing some SD cards and eventually some USB flash drives. This has been sort of
-an evolution of sorts.
+AES 256 CTR mode (stream cipher) 32Bit random key 16Bit random IV/Nonce. No "Salted" or PBKDF2 metadata headers are written
+because Key / IV are supplied directly. Result is high-entropy bytes from absolute beginning to end of drive for plausible
+deniability (pure random-looking fill from uninitialized drive).
 
+If formatting with file system, it mimics factory settings (random Serial / UUID / Label). Leaves no trace of wipe.
 
-There are -flags you can use to customize the wipe based on
-your needs. You can skip methods, use only certain methods, etc. (read on or use with -h).
+Attempts to utilize Discard/TRIM if supported by device controller, otherwise does a 1-pass zero fill, then optional file system.
+
+There are `--flags` you can use to customize the wipe based on your needs. You can skip methods, use only certain methods, etc. (read on or use with -h).
 
 
 
