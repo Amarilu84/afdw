@@ -39,7 +39,7 @@ AFDW by default runs in a "guided" mode which has lots of safety's in place with
 You can use different flags to modify or change it's behavior.
 
 AFDW also supports an emergency mode which instantly and immediately begins wiping with the fastest, most secure method possible, bypassing
-all safety's and confirmations, melting all system drives and the like - because "they are on their way to get you".
+all safety's and confirmations, even melting system drives. IYKYK.
 
 There are `--flags` you can use to customize the wipe based on your needs. You can skip methods, use only certain methods, etc. (read on or use with -h).
 
