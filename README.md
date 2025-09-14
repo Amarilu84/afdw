@@ -30,7 +30,9 @@ AES 256 CTR mode (stream cipher) 32Bit random key 16Bit random IV/Nonce. No "Sal
 because Key / IV are supplied directly. Result is high-entropy bytes from absolute beginning to end of drive for plausible
 deniability (pure random-looking fill from uninitialized drive).
 
-If formatting with file system, it mimics factory settings (random Serial / UUID / Label). Leaves no trace of wipe.
+If formatting with file system, it mimics factory settings (random Serial / UUID / Label). Leaves no trace of wipe. It also writes the appropriate
+"cylinders" (clusters) based on size of disk (< 8 GiB → 16 KiB / 8–32 GiB → 32 KiB / 32–128 GiB → 64 KiB / ≥ 128 GiB → 128 KiB)
+as would a legitimate "factory setting".
 
 Attempts to utilize Discard/TRIM if supported by device controller, otherwise does a 1-pass zero fill, then optional file system.
 
