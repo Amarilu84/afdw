@@ -535,7 +535,7 @@ if [[ $DO_ZERO_FALLBACK -eq 1 ]]; then
     if [[ -n "$PV_BIN" ]]; then
       dd if=/dev/zero bs=8M count="$BYTES" iflag=count_bytes \
       | "$PV_BIN" -f -p -t -e -r -b -s "$BYTES" \
-      | dd of="$DEVICE" oflag=direct conv=fdatasync status=none
+      | dd of="$DEVICE" bs=8M iflag=fullblock oflag=direct conv=fdatasync status=none
     else
       dd if=/dev/zero of="$DEVICE" bs=8M count="$BYTES" iflag=count_bytes oflag=direct status=progress conv=fdatasync
     fi
