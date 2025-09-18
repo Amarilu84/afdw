@@ -1,9 +1,8 @@
-##!/usr/bin/env bash
+#!/usr/bin/env bash
 # Anti-Forensic Drive Wiper (AFDW)
-# Version: 1.2.0
+# Version: 1.3.0
 # SPDX-License-Identifier: MIT
 # WARNING: This destroys data irreversibly. Use at your own risk.
-
 set -Eeuo pipefail
 
 ############################################
@@ -18,10 +17,12 @@ else
 fi
 
 ############################################
-#             AFDW v1.2                    #
+#             AFDW v1.3                    #
 ############################################
 splash() {
-  clear || true
+  # only clear if stdout is a TTY
+  if [[ -t 1 ]]; then clear; fi
+
   cat <<'EOF'
 .·:''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''':·.
 : : .█████╗.███╗...██╗████████╗██╗............................................... : :
@@ -42,15 +43,15 @@ splash() {
 : : ██║..██║██╔══██╗██║╚██╗.██╔╝██╔══╝......██║███╗██║██║██╔═══╝.██╔══╝..██╔══██╗ : :
 : : ██████╔╝██║..██║██║.╚████╔╝.███████╗....╚███╔███╔╝██║██║.....███████╗██║..██║ : :
 : : ╚═════╝.╚═╝..╚═╝╚═╝..╚═══╝..╚══════╝.....╚══╝╚══╝.╚═╝╚═╝.....╚══════╝╚═╝..╚═╝ : :
-'·:.....oRioN NetheRstaR.................................................v1.2.....:·'
+'·:.....oRioN NetheRstaR.................................................v1.3.....:·'
 EOF
   cat <<EOF
 
-${BLD}${CYN}This tool will PERMANENTLY ERASE the selected device.${RST}
-${YLW}• No recovery. No undo. We are not responsible for any loss.${RST}
+${BLD}${CYN}This tool will PERMANENTLY ERASE all data on the selected device.${RST}
+${YLW}• No recovery. No undo. We are not responsible for any data loss!${RST}
 ${YLW}• Designed to produce a "factory-fresh" forensic appearance.${RST}
-${YLW}• It is extreme low probability that any data can be recovered.${RST}
-${RED}• Designed to resist government/national semiconductor LAB recovery.${RST}
+${YLW}• It is virtually impossible that any data can be recovered.${RST}
+${RED}• Designed to resist government/national security semiconductor LAB recovery.${RST}
 
 EOF
 }
@@ -63,6 +64,7 @@ LABEL_MODE="RANDOM"
 CUSTOM_LABEL=""
 TABLE_TYPE="msdos"     # --gpt to change
 DO_FORMAT=1            # --no-format to skip
+FORCE_FORMAT=0
 DO_NOISE=1             # --noise-only to limit
 DO_ZERO_FALLBACK=1     # --zero-only to limit
 STRICT_VERIFY=0
@@ -97,6 +99,7 @@ Options:
   --fast                    If DISCARD unsupported, auto-skip noise to save time
 
   --no-format               Skip partition+exFAT format
+  --force-format            Always (re)format the partition, even if a filesystem is detected
   --gpt                     Use GPT instead of MBR (msdos)
   --label RANDOM|CUSTOM     exFAT label mode (default RANDOM)
   --label-text "NAME1234"   With --label CUSTOM, set exact label (A–Z0–9 up to 11; upcased)
@@ -135,6 +138,7 @@ while [[ $# -gt 0 ]]; do
     --skip-wipe) DO_NOISE=0; DO_ZERO_FALLBACK=0; SKIP_WIPE=1; shift;;
     --fast) FAST=1; shift;;
     --no-format) DO_FORMAT=0; shift;;
+    --force-format) FORCE_FORMAT=1; shift;;
     --gpt) TABLE_TYPE="gpt"; shift;;
     --label) LABEL_MODE="${2:-RANDOM}"; shift 2;;
     --label-text) CUSTOM_LABEL="${2:-}"; shift 2;;
@@ -144,7 +148,7 @@ while [[ $# -gt 0 ]]; do
     --doctor) DOCTOR=1; shift;;
     --install-deps) AUTO_INSTALL_DEPS=1; shift;;
 
-    --no-color) shift;; # already handled
+    --no-color) shift;; # already handled elsewhere (colors are always on by default here)
     -h|--help) usage; exit 0;;
     *) echo "${RED}Unknown option:${RST} $1"; usage; exit 1;;
   esac
@@ -159,20 +163,33 @@ info(){ echo -e "${GRN}==>${RST} $*"; }
 cmd() { [[ $DRY_RUN -eq 1 ]] && echo "[dry-run] $*" || eval "$@"; }
 
 require_root() { [[ $EUID -eq 0 ]] || die "Run as root (sudo)."; }
+has_pv() { command -v pv >/dev/null 2>&1; }
 
 # Strict dependency checker with optional auto-install (Debian/Ubuntu)
 check_deps() {
   # Always-required tools
   local required=( lsblk dd openssl parted blkid uuidgen blockdev grep awk sed tr wc hexdump )
+
   # Required when formatting
   local format_req=( mkfs.exfat )
+
+  # Add sfdisk if we're going to set an MBR (msdos) partition type
+  if [[ "$TABLE_TYPE" == "msdos" && $DO_FORMAT -eq 1 ]]; then
+    required+=( sfdisk )
+  fi
+
   # Optional helpers
   local optional=( blkdiscard findmnt udisksctl partx kpartx )
 
   local missing=()
-  for b in "${required[@]}"; do command -v "$b" >/dev/null 2>&1 || missing+=("$b"); done
+  for b in "${required[@]}"; do
+    command -v "$b" >/dev/null 2>&1 || missing+=("$b")
+  done
+
   if [[ $DO_FORMAT -eq 1 ]]; then
-    for b in "${format_req[@]}"; do command -v "$b" >/dev/null 2>&1 || missing+=("$b"); done
+    for b in "${format_req[@]}"; do
+      command -v "$b" >/dev/null 2>&1 || missing+=("$b")
+    done
   fi
 
   if (( ${#missing[@]} > 0 )); then
@@ -233,7 +250,16 @@ partition_name_for() {
   fi
 }
 
-rand_label() { tr -dc 'A-Z0-9' </dev/urandom | head -c 8; }
+rand_label() {
+  local -a CHARS=( {A..Z} {0..9} )
+  local label=""
+  local nums val
+  nums=$(od -An -N8 -tu1 /dev/urandom) || return 1
+  for val in $nums; do
+    label+="${CHARS[val%36]}"
+  done
+  printf '%s' "$label"
+}
 
 cooldown() {
   local secs="$1"
@@ -246,6 +272,77 @@ cooldown() {
 
 json_escape() {
   sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'
+}
+PV_BIN="$(command -v pv || true)"
+
+# --- Pre-partition erase rules (MBR vs GPT) ---
+#
+# MBR mode ("dos"):
+# - Metadata only at the very start: the master boot record at LBA0 (first sector).
+# - No mandatory metadata at the end of disk.
+# - Safe head wipe: from LBA1 up to just before the first partition.
+#   (We keep a 64 KiB cushion before PSTART to avoid touching bootloaders, etc.)
+# - Safe tail wipe: allowed to end-of-disk (optionally keep a 64 KiB cushion).
+#
+# GPT mode:
+# - Metadata at BOTH ends:
+#   * Head: protective MBR at LBA0 + primary GPT header/entries in the first 34 sectors.
+#   * Tail: backup GPT entries + backup GPT header in the last 33 sectors.
+# - Never overwrite those regions.
+# - Safe head wipe: start AFTER the primary GPT area (34 * sector_size),
+#   optionally add a 64 KiB cushion, and stop 64 KiB before PSTART.
+# - Safe tail wipe: stop at least 64 KiB BEFORE the backup GPT region
+#   (i.e., before DISK_SIZE - 33 * sector_size).
+#
+# Notes:
+# - 34/33 sectors are the common layout (128 GPT entries). Sector size matters:
+#   34 * 512 B ≈ 17 KiB; 34 * 4096 B ≈ 136 KiB.
+# - Tools like parted usually align the first partition at 1 MiB, leaving ample headroom.
+
+detect_pttype() {
+  # Returns "dos" or "gpt" (falls back to $TABLE_TYPE if lsblk can't tell yet)
+  local ptt
+  ptt="$(lsblk -no PTTYPE "$DEVICE" 2>/dev/null | tr -d '[:space:]')"
+  [[ -n "$ptt" ]] || ptt="$TABLE_TYPE"
+  echo "$ptt"
+}
+
+wipe_prepartition_gap() {
+  # Zero the pre-partition gap according to real PT type (safe for MBR/GPT)
+  # Uses: $DEVICE
+  local ptt ss pstart
+  ptt="$(detect_pttype)"
+  ss="$(blockdev --getss "$DEVICE")" || ss=512
+  pstart="$(parted -m "$DEVICE" unit B print | awk -F: '/^1:/{print $2}' | tr -d 'B')"
+  [[ -z "$pstart" ]] && { warn "Could not determine partition start"; return 0; }
+
+  if [[ "$ptt" == "dos" || "$ptt" == "msdos" ]]; then
+    # MBR: leave LBA0 intact
+    local pstart_sectors=$(( pstart / ss ))
+    if (( pstart_sectors > 1 )); then
+      info "Zeroing msdos pre-partition gap: sectors 1..$((pstart_sectors-1))"
+      dd if=/dev/zero of="$DEVICE" bs="$ss" seek=1 count=$((pstart_sectors-1)) \
+         conv=notrunc,fsync status=none
+    else
+      info "No msdos pre-gap to zero (PSTART=$pstart)."
+    fi
+  else
+    # GPT: keep protective MBR + primary GPT header/entries (≈34 sectors).
+    # Start wipe at the next 64KiB boundary after that, stop 64KiB before PSTART.
+    local reserved_bytes=$(( 34 * ss ))
+    local blk=65536
+    local start=$(( ( (reserved_bytes + blk - 1) / blk ) * blk ))  # ceil to 64KiB
+    local end=$(( pstart - blk ))                                  # leave 64KiB cushion
+    if (( end > start )); then
+      local seek_blocks=$(( start / blk ))
+      local count=$(( (end - start) / blk ))
+      info "Zeroing GPT pre-partition gap: ${start}..${end} bytes (64KiB blocks)"
+      dd if=/dev/zero of="$DEVICE" bs=$blk seek=$seek_blocks count=$count \
+         conv=notrunc,fsync status=none
+    else
+      info "GPT pre-gap too small to zero safely (PSTART=$pstart)."
+    fi
+  fi
 }
 
 ############################################
@@ -381,18 +478,29 @@ fi
 #              Wipe: Noise pass            #
 ############################################
 if [[ $DO_NOISE -eq 1 ]]; then
-  info "Filling device with encrypted noise (AES-256-CTR, throwaway key/iv)..."
+  info "Filling device with encrypted noise (AES-256-CTR)..."
   T_NOISE_START=$(date +%s)
   if [[ $DRY_RUN -eq 1 ]]; then
-    echo "[dry-run] dd if=/dev/zero bs=1M count=$BYTES iflag=count_bytes | openssl enc -aes-256-ctr -K \$(openssl rand -hex 32) -iv \$(openssl rand -hex 16) | dd of='$DEVICE' bs=8M iflag=fullblock oflag=direct status=progress conv=fdatasync"
+    if has_pv; then
+      echo "[dry-run] dd if=/dev/zero bs=1M count=$BYTES iflag=count_bytes | openssl enc -aes-256-ctr -K \$(openssl rand -hex 32) -iv \$(openssl rand -hex 16) | pv -f -p -t -e -r -b -s $BYTES | dd of='$DEVICE' bs=8M iflag=fullblock oflag=direct status=none conv=fdatasync"
+    else
+      echo "[dry-run] dd if=/dev/zero bs=1M count=$BYTES iflag=count_bytes | openssl enc -aes-256-ctr -K \$(openssl rand -hex 32) -iv \$(openssl rand -hex 16) | dd of='$DEVICE' bs=8M iflag=fullblock oflag=direct status=progress conv=fdatasync"
+    fi
   else
     set -o pipefail
-    dd if=/dev/zero bs=1M count="$BYTES" iflag=count_bytes \
-    | openssl enc -aes-256-ctr -K "$(openssl rand -hex 32)" -iv "$(openssl rand -hex 16)" \
-    | dd of="$DEVICE" bs=8M iflag=fullblock oflag=direct status=progress conv=fdatasync
-    set +o pipefail
-  fi
-  T_NOISE_END=$(date +%s); TIME_NOISE=$(( T_NOISE_END - T_NOISE_START ))
+    fi
+if [[ -n "$PV_BIN" ]]; then
+  dd if=/dev/zero bs=1M count="$BYTES" iflag=count_bytes \
+  | openssl enc -aes-256-ctr -K "$(openssl rand -hex 32)" -iv "$(openssl rand -hex 16)" \
+  | "$PV_BIN" -f -p -t -e -r -b -s "$BYTES" \
+  | dd of="$DEVICE" bs=8M iflag=fullblock oflag=direct conv=fdatasync status=none
+else
+  # Fallback: dd shows a simple progress counter (no ETA)
+  dd if=/dev/zero bs=1M count="$BYTES" iflag=count_bytes \
+  | openssl enc -aes-256-ctr -K "$(openssl rand -hex 32)" -iv "$(openssl rand -hex 16)" \
+  | dd of="$DEVICE" bs=8M iflag=fullblock oflag=direct status=progress conv=fdatasync
+fi
+set +o pipefail
 fi
 
 ############################################
@@ -401,6 +509,7 @@ fi
 if [[ $DO_ZERO_FALLBACK -eq 1 ]]; then
   info "Attempting controller discard (ghost erase) with verification..."
   T_ERASE_START=$(date +%s)
+
   if [[ $DISCARD_OK -eq 1 && $DRY_RUN -eq 0 ]]; then
     blkdiscard -v "$DEVICE" 2>/dev/null || true
   else
@@ -423,14 +532,17 @@ if [[ $DO_ZERO_FALLBACK -eq 1 ]]; then
 
   if [[ $NEED_ZERO -eq 1 ]]; then
     info "Discard verification failed; performing single zero pass..."
-    if [[ $DRY_RUN -eq 1 ]]; then
-      echo "[dry-run] dd if=/dev/zero of='$DEVICE' bs=8M count=$BYTES iflag=count_bytes oflag=direct status=progress conv=fdatasync"
+    if [[ -n "$PV_BIN" ]]; then
+      dd if=/dev/zero bs=8M count="$BYTES" iflag=count_bytes \
+      | "$PV_BIN" -f -p -t -e -r -b -s "$BYTES" \
+      | dd of="$DEVICE" oflag=direct conv=fdatasync status=none
     else
       dd if=/dev/zero of="$DEVICE" bs=8M count="$BYTES" iflag=count_bytes oflag=direct status=progress conv=fdatasync
     fi
   else
     info "Blocks sampled show erased pattern (00/FF)."
   fi
+
   T_ERASE_END=$(date +%s); TIME_ERASE=$(( T_ERASE_END - T_ERASE_START ))
 fi
 
@@ -440,53 +552,162 @@ fi
 VOL_LABEL=""
 FS_UUID=""
 if [[ $DO_FORMAT -eq 1 ]]; then
-  info "Partitioning (${TABLE_TYPE}) + exFAT formatting..."
+  info "Starting the format step: we'll create a fresh $TABLE_TYPE partition table, set the partition type for exFAT, wait for the OS to expose the partition node, and then format it as exFAT."
   T_FORMAT_START=$(date +%s)
 
   if [[ $DRY_RUN -eq 1 ]]; then
-    echo "[dry-run] parted -a optimal '$DEVICE' --script mklabel $TABLE_TYPE mkpart primary 1MiB 100%"
+    echo "[dry-run] Creating $TABLE_TYPE table and a single partition spanning the device..."
+    echo "[dry-run] parted -a optimal '$DEVICE' --script mklabel '$TABLE_TYPE' mkpart primary 1MiB 100%"
+    if [[ "$TABLE_TYPE" == "msdos" ]]; then
+      echo "[dry-run] Setting MBR partition type to 0x07 (Microsoft basic data: NTFS/exFAT)..."
+      echo "[dry-run] sfdisk --part-type '$DEVICE' 1 7"
+    else
+      echo "[dry-run] Marking GPT partition as Microsoft basic data (msftdata)..."
+      echo "[dry-run] parted -s '$DEVICE' set 1 msftdata on"
+    fi
+    echo "[dry-run] Asking kernel to re-read the partition table and waiting for udev..."
+    echo "[dry-run] partprobe '$DEVICE'"
+    echo "[dry-run] udevadm settle -t 2"
+    echo "[dry-run] partx -u '$DEVICE'"
+    command -v kpartx >/dev/null 2>&1 && echo "[dry-run] kpartx -a '$DEVICE'"
+    echo "[dry-run] blockdev --rereadpt '$DEVICE'"
+    if [[ "$DEVICE" == /dev/mmcblk* ]]; then
+      # Print literal command with subshell visible to user
+      echo "[dry-run] echo 1 > /sys/class/block/\$(basename \"$DEVICE\")/device/rescan"
+      echo "[dry-run] udevadm settle -t 2"
+    fi
+    echo "[dry-run] Choosing label and formatting exFAT on <PART>..."
+
   else
+    # 1) Create table + partition
+    info "Creating a new $TABLE_TYPE partition table and a single partition that starts at 1 MiB and uses the full device..."
     parted -a optimal "$DEVICE" --script mklabel "$TABLE_TYPE" mkpart primary 1MiB 100%
+
+    # 2) Set correct partition type (MBR=0x07, GPT=msftdata)
+    if [[ "$TABLE_TYPE" == "msdos" ]]; then
+      info "Setting MBR partition type to 0x07 (Microsoft basic data: NTFS/exFAT) so tools recognize exFAT correctly..."
+      sfdisk --part-type "$DEVICE" 1 7
+    else
+      info "Marking GPT partition as Microsoft basic data (msftdata) for exFAT/NTFS compatibility..."
+      parted -s "$DEVICE" set 1 msftdata on
+    fi
+
+    # 3) Re-read partition table + wait for node
+    info "Asking the kernel to re-read the partition table and waiting for the partition node to appear..."
     partprobe "$DEVICE" 2>/dev/null || true
-    # For loop devices and some kernels, nudge partition nodes to appear:
-    if [[ "$DEVICE" == /dev/loop* ]]; then
-      partx -u "$DEVICE" 2>/dev/null || true
-      kpartx -a "$DEVICE" 2>/dev/null || true
-    fi
-    # Recompute PART now that the table exists and wait for node
     PART="$(partition_name_for "$DEVICE")"
-    for i in {1..20}; do
+
+    for i in {1..60}; do
       [[ -b "$PART" ]] && break
-      sleep 0.2
+      udevadm settle -t 2 2>/dev/null || true
       partprobe "$DEVICE" 2>/dev/null || true
+      partx -u "$DEVICE" 2>/dev/null || true
+      command -v kpartx >/dev/null 2>&1 && kpartx -a "$DEVICE" 2>/dev/null || true
+      blockdev --rereadpt "$DEVICE" 2>/dev/null || true
+      sleep 0.25
     done
-    [[ -b "$PART" ]] || die "Partition node $PART did not appear."
-  fi
-
-  # Decide label
-  if [[ "$LABEL_MODE" == "CUSTOM" ]]; then
-    [[ -z "$CUSTOM_LABEL" ]] && die "--label CUSTOM requires --label-text"
-    VOL_LABEL="$(echo "$CUSTOM_LABEL" | tr '[:lower:]' '[:upper:]' | tr -cd 'A-Z0-9' | cut -c1-11)"
-  else
-    VOL_LABEL="$(rand_label)"
-  fi
-  GUID="$(uuidgen)"
-
-  if [[ $DRY_RUN -eq 1 ]]; then
-    echo "[dry-run] mkfs.exfat -L '$VOL_LABEL' -U '$GUID' -c <auto> '$PART'"
-  else
-    PSIZE=$(blockdev --getsize64 "$PART")
-    GIB=$((PSIZE/1024/1024/1024))
-    if   (( GIB < 8 ));   then CS="16K"
-    elif (( GIB < 32 ));  then CS="32K"
-    elif (( GIB < 128 )); then CS="64K"
-    else                       CS="128K"
+    if [[ ! -b "$PART" && "$DEVICE" == /dev/mmcblk* ]]; then
+      DEVPATH=$(readlink -f "/sys/class/block/$(basename "$DEVICE")/device") || true
+      [[ -d "$DEVPATH" ]] && echo 1 > "$DEVPATH/rescan" 2>/dev/null || true
+      udevadm settle -t 2 2>/dev/null || true
     fi
-    mkfs.exfat -L "$VOL_LABEL" -U "$GUID" -c "$CS" "$PART"
-  fi
+    [[ -b "$PART" ]] || die "Partition node $PART did not appear after rescans."
+    info "Confirmed: partition node $PART exists."
 
-  if [[ $DRY_RUN -eq 0 ]]; then
+    # 3a) Zero the pre-partition gap based on table type (unless --skip-wipe)
+    if [[ $SKIP_WIPE -eq 0 ]]; then
+      wipe_prepartition_gap
+    else
+      info "Skipping pre-partition gap zeroing due to --skip-wipe."
+    fi
+
+    # 4) Format exFAT (honor --force-format; reformat if existing FS != exfat)
+    # Detect any existing filesystem (two ways, then unify)
+    FSTYPE_LSBLK="$(lsblk -no FSTYPE "$PART" 2>/dev/null || true)"
+    FSTYPE_BLKID="$(blkid -p -s TYPE -o value "$PART" 2>/dev/null || true)"
+    FSTYPE="${FSTYPE_LSBLK:-$FSTYPE_BLKID}"
+
+    if [[ "$FORCE_FORMAT" -eq 1 || -z "$FSTYPE" || "$FSTYPE" != "exfat" ]]; then
+      [[ "$FORCE_FORMAT" -eq 1 && -n "$FSTYPE" ]] && info "Forcing reformat (existing FSTYPE=$FSTYPE)."
+
+      # Decide label
+      if [[ "$LABEL_MODE" == "CUSTOM" ]]; then
+        [[ -z "$CUSTOM_LABEL" ]] && die "--label CUSTOM requires --label-text"
+        VOL_LABEL="$(echo "$CUSTOM_LABEL" | tr '[:lower:]' '[:upper:]' | tr -cd 'A-Z0-9' | cut -c1-11)"
+        info "Using custom exFAT label: $VOL_LABEL"
+      else
+        VOL_LABEL="$(rand_label)"
+        info "Using random exFAT label: $VOL_LABEL"
+      fi
+
+      # Choose cluster size based on partition size
+      PSIZE=$(blockdev --getsize64 "$PART")
+      GIB=$((PSIZE/1024/1024/1024))
+      if   (( GIB < 8 ));    then CS="16K"
+      elif (( GIB < 32 ));   then CS="32K"
+      elif (( GIB < 128 ));  then CS="64K"
+      else                        CS="128K"
+      fi
+
+      # Pick mkfs tool: prefer exfatprogs (mkfs.exfat), fall back to exfat-utils (mkexfatfs)
+      MKFS_EXFAT="$(command -v mkfs.exfat || true)"
+      MKEXFATFS="$(command -v mkexfatfs  || true)"
+      if [[ -n "$MKFS_EXFAT" ]]; then
+        :
+      elif [[ -n "$MKEXFATFS" ]]; then
+        :
+      else
+        die "No exFAT mkfs tool found. Install exfatprogs (preferred) or exfat-utils."
+      fi
+
+      info "Formatting $PART as exFAT (label=$VOL_LABEL, cluster=$CS)..."
+
+    if [[ -n "$MKFS_EXFAT" ]]; then
+      "$MKFS_EXFAT" -n "$VOL_LABEL" -c "$CS" "$PART"; rc=$?
+    else
+      # Determine hardware sector size (fallback to 512)
+      ss="$(blockdev --getss "$PART" 2>/dev/null || blockdev --getss "$DEVICE" 2>/dev/null || echo 512)"
+
+      # Map desired cluster bytes -> sectors-per-cluster for mkexfatfs
+    case "$CS" in
+      16K)  cluster=16384  ;;
+      32K)  cluster=32768  ;;
+      64K)  cluster=65536  ;;
+      128K) cluster=131072 ;;
+      *)    cluster=65536  ;;  # default 64K
+    esac
+
+  # Guard against weird sector sizes
+  (( ss > 0 )) || ss=512
+  SPC=$(( cluster / ss ))
+  (( SPC < 1 )) && SPC=1  # safety clamp
+
+  "$MKEXFATFS" -n "$VOL_LABEL" -s "$SPC" "$PART"; rc=$?
+fi
+      (( rc == 0 )) || die "mkfs exFAT failed (rc=$rc). Ensure the device isn't in use."
+
+      sync
+      udevadm settle -t 2 2>/dev/null || true
+    else
+      info "Filesystem already detected on $PART (FSTYPE=$FSTYPE); skipping format."
+    fi
+
+    # 5) Snapshot + EXFAT boot-sector check
     FS_UUID="$(blkid -s UUID -o value "$PART" || true)"
+    PTTYPE_NOW="$(lsblk -no PARTTYPE "$PART" 2>/dev/null || true)"
+    FSTYPE_NOW="$(lsblk -no FSTYPE "$PART" 2>/dev/null || true)"
+    LAB_NOW="$(lsblk -no LABEL "$PART" 2>/dev/null || true)"
+    info "Post-format snapshot:"
+    lsblk -o NAME,SIZE,FSTYPE,PARTTYPE,LABEL "$DEVICE" | sed 's/^/   /'
+    blkid -p "$PART" | sed 's/^/   /'
+
+    # Expect bytes 3..7 to read 'EXFAT'
+    if dd if="$PART" bs=1 skip=3 count=7 status=none 2>/dev/null | tr -d '\0' | grep -q "EXFAT"; then
+      info "Verified: exFAT boot sector signature is present ('EXFAT')."
+    else
+      warn "Could not confirm the 'EXFAT' signature in sector 0; filesystem may still be fine."
+    fi
+    info "Done: partition type=${PTTYPE_NOW:-unknown}, filesystem=${FSTYPE_NOW:-unknown}, label=${LAB_NOW:-unset}, uuid=${FS_UUID:-unset}."
   fi
   T_FORMAT_END=$(date +%s); TIME_FORMAT=$(( T_FORMAT_END - T_FORMAT_START ))
 fi
@@ -494,7 +715,7 @@ fi
 ############################################
 #               Verification               #
 ############################################
-info "Running post-process verification..."
+info "Now verifying: MBR signature, erased samples (beginning/middle/end), table type, label/UUID format, and alignment."
 T_VERIFY_START=$(date +%s)
 VERIFY_OK=1
 VERIFY_LOG="$(mktemp "${LOG_DIR}/verify_XXXX.txt")"
@@ -505,6 +726,7 @@ VERIFY_LOG="$(mktemp "${LOG_DIR}/verify_XXXX.txt")"
 
 ver_pass(){ echo "PASS - $1" | tee -a "$VERIFY_LOG"; }
 ver_fail(){ echo "FAIL - $1" | tee -a "$VERIFY_LOG"; VERIFY_OK=0; }
+ver_skip(){ echo "SKIP - $1" | tee -a "$VERIFY_LOG"; }
 
 # Part 1: MBR signature (for GPT, protective MBR still has 0x55AA)
 SIG="$(dd if="$DEVICE" bs=1 skip=$((512-2)) count=2 status=none | hexdump -v -e '1/1 "%02x"')"
@@ -514,10 +736,19 @@ if echo "$SIG" | grep -qi "^55aa$"; then ver_pass "MBR signature present (0x55AA
 PSTART="$(parted -m "$DEVICE" unit B print | awk -F: '/^1:/{print $2}' | tr -d B || echo 0)"
 GAP_START=$((64*1024)); GAP_END=$((PSTART-64*1024))
 if (( GAP_END > GAP_START )); then
-  GLEN=$(( GAP_END - GAP_START )); (( GLEN > 256*1024 )) && GLEN=$((256*1024))
-  NZ=$(dd if="$DEVICE" bs=1 skip="$GAP_START" count="$GLEN" iflag=skip_bytes,count_bytes status=none | tr -d '\000' | wc -c)
-  NF=$(dd if="$DEVICE" bs=1 skip="$GAP_START" count="$GLEN" iflag=skip_bytes,count_bytes status=none | tr -d '\377' | wc -c)
-  if [[ "$NZ" -eq 0 || "$NF" -eq 0 ]]; then ver_pass "Pre-partition gap erased (00/FF)"; else ver_fail "Pre-partition gap not erased"; fi
+  if [[ $SKIP_WIPE -eq 1 ]]; then
+    ver_skip "Pre-partition gap zeroing skipped (--skip-wipe)"
+    [[ $STRICT_VERIFY -eq 1 ]] && ver_fail "Strict mode: pre-partition gap not zeroed (skipped via --skip-wipe)"
+  else
+    GLEN=$(( GAP_END - GAP_START )); (( GLEN > 256*1024 )) && GLEN=$((256*1024))
+    NZ=$(dd if="$DEVICE" bs=1 skip="$GAP_START" count="$GLEN" iflag=skip_bytes,count_bytes status=none | tr -d '\000' | wc -c)
+    NF=$(dd if="$DEVICE" bs=1 skip="$GAP_START" count="$GLEN" iflag=skip_bytes,count_bytes status=none | tr -d '\377' | wc -c)
+    if [[ "$NZ" -eq 0 || "$NF" -eq 0 ]]; then
+      ver_pass "Pre-partition gap erased (00/FF)"
+    else
+      ver_fail "Pre-partition gap not erased"
+    fi
+  fi
 else
   ver_fail "Pre-partition gap too small to verify"
 fi
@@ -537,12 +768,43 @@ if [[ "$NZ" -eq 0 || "$NF" -eq 0 ]]; then ver_pass "Last block erased (00/FF)"; 
 
 # Part 5: Partition table type
 PT_OUT="$(parted "$DEVICE" --script print 2>/dev/null || true)"
-echo "$PT_OUT" | grep -qi "Partition Table: $TABLE_TYPE" && ver_pass "Partition table is $TABLE_TYPE" || ver_fail "Partition table not $TABLE_TYPE"
+echo "$PT_OUT" | grep -qi "Partition Table: $TABLE_TYPE" \
+  && ver_pass "Partition table is $TABLE_TYPE" \
+  || ver_fail "Partition table not $TABLE_TYPE"
+
+# Part 5b: Filesystem type is exFAT (only if we formatted)
+if [[ $DO_FORMAT -eq 1 ]]; then
+  FST="$(blkid -p -s TYPE -o value "$PART" 2>/dev/null || true)"
+  if [[ "$FST" == "exfat" ]]; then
+    ver_pass "Filesystem type is exFAT"
+  else
+    ver_fail "Filesystem type is '$FST' (expected exFAT)"
+  fi
+fi
+
+# Part 5c: Partition type code matches expectation (only if we formatted)
+if [[ $DO_FORMAT -eq 1 ]]; then
+  PTTYPE="$(lsblk -no PARTTYPE "$PART" 2>/dev/null || true)"
+  if [[ "$TABLE_TYPE" == "msdos" ]]; then
+    [[ "$PTTYPE" == "0x7" || "$PTTYPE" == "0x07" ]] \
+      && ver_pass "MBR partition type is 0x07 (Microsoft basic data)" \
+      || ver_fail "MBR partition type is $PTTYPE (expected 0x07)"
+  else
+    # GPT Microsoft Basic Data GUID starts with EBD0A0A2…
+    echo "$PTTYPE" | grep -Eqi 'ebd0a0a2' \
+      && ver_pass "GPT partition type is Microsoft Basic Data (EBD0A0A2…)" \
+      || ver_fail "GPT partition type GUID unexpected ($PTTYPE)"
+  fi
+fi
 
 # Part 6: Volume label pattern
 if [[ $DO_FORMAT -eq 1 ]]; then
   LAB="$(blkid -s LABEL -o value "$PART" 2>/dev/null || true)"
-  if echo "$LAB" | grep -Eq '^[A-Z0-9]{1,11}$'; then ver_pass "Volume label OK ($LAB)"; else ver_fail "Volume label unexpected ($LAB)"; fi
+  if echo "$LAB" | grep -Eq '^[A-Z0-9]{1,11}$'; then
+    ver_pass "Volume label OK ($LAB)"
+  else
+    ver_fail "Volume label unexpected ($LAB)"
+  fi
 else
   ver_pass "Format skipped (per options)"
 fi
@@ -550,7 +812,11 @@ fi
 # Part 7: exFAT UUID format ####-####
 if [[ $DO_FORMAT -eq 1 ]]; then
   UUIDF="$(blkid -s UUID -o value "$PART" 2>/dev/null || true)"
-  if echo "$UUIDF" | grep -Eq '^[A-F0-9]{4}-[A-F0-9]{4}$'; then ver_pass "exFAT UUID format OK ($UUIDF)"; else ver_fail "exFAT UUID unexpected ($UUIDF)"; fi
+  if echo "$UUIDF" | grep -Eqi '^[A-F0-9]{4}-[A-F0-9]{4}$'; then
+    ver_pass "exFAT UUID format OK ($UUIDF)"
+  else
+    ver_fail "exFAT UUID unexpected ($UUIDF)"
+  fi
 else
   ver_pass "Format skipped (per options)"
 fi

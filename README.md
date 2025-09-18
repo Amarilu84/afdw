@@ -22,13 +22,14 @@
 </p>
 
 AFDW — The "Anti-Forensic Drive Wiper"
-Securely wipes most drives with the intent of shredding data beyond recovery and leaving no trace of wipe signatures
+Securely wipes drives with the intent of shredding data beyond recovery and leaving no trace of wipe signatures
 even by extreme methods up to and including national security/government forensic LABs.
 
 AES 256 CTR mode (stream cipher) 32Bit random key 16Bit random IV/Nonce. No "Salted" or PBKDF2 metadata headers are written
 because Key / IV are supplied directly. Result is high-entropy bytes from absolute beginning to end of drive for plausible
 deniability (pure random-looking fill from uninitialized drive).
 
+<<<<<<< HEAD
 If formatting with file system, it mimics factory settings (random Serial / UUID / Label). Leaves no trace of wipe. It also writes the appropriate
 "cylinders" (clusters) based on size of disk (< 8 GiB → 16 KiB / 8–32 GiB → 32 KiB / 32–128 GiB → 64 KiB / ≥ 128 GiB → 128 KiB)
 as would a legitimate "factory setting".
@@ -40,6 +41,13 @@ You can use different flags to modify or change it's behavior.
 
 AFDW also supports an emergency mode which instantly and immediately begins wiping with the fastest, most secure method possible, bypassing
 all safety's and confirmations, even melting system drives. IYKYK.
+=======
+Attempts to utilize Discard/TRIM if supported by device controller, otherwise does a 1-pass zero fill, then optional file system.
+
+If formatting with file system, it mimics factory settings (random Serial / UUID / Label). Leaves no trace of wipe.
+It also properly handles zero-wiping pre-partition area, noting whether it is MBR or GPT and safely handling each
+without nuking MBR or partition meta-data.
+>>>>>>> 23a37a4 (release: v1.3 updates (README/examples + exFAT fixes, pv progress, verify))
 
 There are `--flags` you can use to customize the wipe based on your needs. You can skip methods, use only certain methods, etc. (read on or use with -h).
 
@@ -180,7 +188,6 @@ sudo bash ./afdw.sh --device /dev/sdX --non-interactive --erase-confirm ERASE
 
 Fast method for drives without TRIM/DISCARD:\
 sudo bash ./afdw.sh --device /dev/sdX --fast
-
 
 Why you might want each mode:
 

@@ -1,116 +1,124 @@
 # Here you will find copy & paste style commands that will teach you how to use AFDW. These are only some examples:
-Note: The normal guided run is pre-programmed to do an encrypted wipe, zero the drive, then format exFat to mimic factory settings. (It was written originally for Flash USB/SD).\
 
-You can always customize the actions and behavior using any --flag.
+**Note:** The normal guided run (no flags) does an encrypted-noise fill, attempts controller discard (or zero-fallback), then creates a single partition and formats **exFAT** to mimic “factory fresh.”
+You can customize behavior with the flags below.
 
+---
 
 ## AFDW Usage Examples
 
-List available disks
-```bash
-./afdw.sh --list
-````
+### 1) Guided (interactive) run — “factory fresh” (noise + zero/discard + exFAT)
 
-Shows all detected drives (Linux via `lsblk`) so you can pick the correct device. (It does this automatically at the start of interactive mode).
+```bash
+sudo ./afdw.sh
+```
+
+### 2) Non-interactive “factory fresh” (no prompts; be careful!)
+
+```bash
+sudo ./afdw.sh --device /dev/sdb --non-interactive --erase-confirm ERASE
+```
+
+### 3) Noise + Zero, but **skip formatting** (leave raw wiped media)
+
+```bash
+sudo ./afdw.sh --device /dev/sdb --no-format
+```
+
+Tip: add `--fast` to auto-skip noise if DISCARD/TRIM isn’t supported.
+
+### 4) **Noise only** (no zero, no format)
+
+```bash
+sudo ./afdw.sh --device /dev/sdb --noise-only
+```
+
+If you want to format afterwards without wiping again, run:
+
+```bash
+sudo ./afdw.sh --device /dev/sdb --skip-wipe
+```
+
+### 5) **Zero only** (fastest single pass), no format
+
+```bash
+sudo ./afdw.sh --device /dev/sdb --zero-only
+```
+
+### 6) **Format only** (no wiping): make a single partition and exFAT
+
+* MBR (msdos; default):
+
+```bash
+sudo ./afdw.sh --device /dev/sdb --skip-wipe --force-format
+```
+
+* GPT with Microsoft Basic Data + custom label:
+
+```bash
+sudo ./afdw.sh --device /dev/sdb --skip-wipe --gpt --label CUSTOM --label-text "ARCHIVE01" --force-format
+```
+
+### 7) Force (re)format even if a filesystem is detected
+
+```bash
+sudo ./afdw.sh --device /dev/sdb --force-format
+```
+
+### 8) Use GPT instead of MBR (applies to the format step)
+
+```bash
+sudo ./afdw.sh --device /dev/sdb --gpt
+```
+
+### 9) Custom exFAT volume label (A–Z0–9 up to 11 chars, uppercased)
+
+```bash
+sudo ./afdw.sh --device /dev/sdb --label CUSTOM --label-text "MEDIA_01"
+```
+
+### 10) Strict verification (fail the run if any verify step fails)
+
+```bash
+sudo ./afdw.sh --device /dev/sdb --strict
+```
+
+### 11) FAST mode (if DISCARD unsupported, auto-skip noise to save time)
+
+```bash
+sudo ./afdw.sh --device /dev/sdb --fast
+```
+
+### 12) Dry-run (show what would happen; no writes)
+
+```bash
+./afdw.sh --device /dev/sdb --dry-run
+```
+
+### 13) Dependency doctor (no writes) / Auto-install deps (Debian/Ubuntu)
+
+```bash
+./afdw.sh --doctor
+sudo ./afdw.sh --install-deps
+```
+
+### 14) Power-off suppression (don’t power-off/eject at the end)
+
+```bash
+sudo ./afdw.sh --device /dev/sdb --no-poweroff
+```
+
+### 15) Danger: allow system disk (root) — only if you really know what you’re doing
+
+```bash
+sudo ./afdw.sh --device /dev/sda --genius
+```
 
 ---
 
-## Wipe a drive with zeros (fastest)
+## Notes
 
-```bash
-sudo ./afdw.sh -d /dev/sdb
-```
-
-Performs a single pass overwrite with **zeros**.
-
----
-
-## Wipe a drive with random encrypted data (more secure, slower)
-
-```bash
-sudo ./afdw.sh -d /dev/sdb -r
-```
-
-Performs a single pass overwrite with **random bytes** from `/dev/urandom` encrypted with AES-256.
-
----
-
-## Multiple passes
-
-```bash
-sudo ./afdw.sh -d /dev/sdb -n 3
-```
-
-Overwrites the drive **3 times** with zeros.
-
----
-
-## Random + multiple passes
-
-```bash
-sudo ./afdw.sh -d /dev/sdb -n 2 -r
-```
-
-Overwrites the drive **twice**, both times with random data.
-
----
-
-## Non-interactive (skip confirmations)
-
-```bash
-sudo ./afdw.sh -d /dev/sdb -y
-```
-
-Automatically assumes “yes” for all prompts.
-Useful for automation scripts — but dangerous if misused.
-
----
-
-## Combine options
-
-```bash
-sudo ./afdw.sh -d /dev/sdb -n 3 -r -y
-```
-
-* 3 passes
-* Random data
-* Non-interactive confirmations
-
----
-
-# Formatting After a Wipe - After wiping, you can reformat the drive with standard Linux tools. Formatting will destroy any existing data on the device.
-
-## 1. Create a new ext4 filesystem (Linux default)
-```bash
-sudo mkfs.ext4 /dev/sdb
-````
-
-Formats the drive with the ext4 filesystem, commonly used on Linux.
-
----
-
-## 2. Create a FAT32 filesystem (USB drives, Windows/macOS compatibility)
-
-```bash
-sudo mkfs.vfat -F 32 /dev/sdb
-```
-
-Good for USB sticks and drives that need to work across multiple OSes.
-
----
-
-## 3. Create an NTFS filesystem (Windows compatibility, large files)
-
-```bash
-sudo mkfs.ntfs -f /dev/sdb
-```
-
-Formats the drive as NTFS, useful for Windows systems and large storage devices.
-
-## ℹHelp
-
-```bash
-./afdw.sh -h
-```
-
-Shows usage information.
+* Replace `/dev/sdb` with the correct device (e.g., `/dev/mmcblk0` for SD cards).
+  The interactive flow lists disks up front.
+* If `pv` is installed, AFDW shows live **progress % and ETA** during long writes. Otherwise, `dd` shows a simpler progress counter.
+* For a label only, or to switch MBR↔GPT without wiping, use **format-only** examples (`--skip-wipe`).
