@@ -29,7 +29,6 @@ AES 256 CTR mode (stream cipher) 32Bit random key 16Bit random IV/Nonce. No "Sal
 because Key / IV are supplied directly. Result is high-entropy bytes from absolute beginning to end of drive for plausible
 deniability (pure random-looking fill from uninitialized drive).
 
-<<<<<<< HEAD
 If formatting with file system, it mimics factory settings (random Serial / UUID / Label). Leaves no trace of wipe. It also writes the appropriate
 "cylinders" (clusters) based on size of disk (< 8 GiB → 16 KiB / 8–32 GiB → 32 KiB / 32–128 GiB → 64 KiB / ≥ 128 GiB → 128 KiB)
 as would a legitimate "factory setting".
@@ -41,16 +40,14 @@ You can use different flags to modify or change it's behavior.
 
 AFDW also supports an emergency mode which instantly and immediately begins wiping with the fastest, most secure method possible, bypassing
 all safety's and confirmations, even melting system drives. IYKYK.
-=======
+
 Attempts to utilize Discard/TRIM if supported by device controller, otherwise does a 1-pass zero fill, then optional file system.
 
 If formatting with file system, it mimics factory settings (random Serial / UUID / Label). Leaves no trace of wipe.
 It also properly handles zero-wiping pre-partition area, noting whether it is MBR or GPT and safely handling each
 without nuking MBR or partition meta-data.
->>>>>>> 23a37a4 (release: v1.3 updates (README/examples + exFAT fixes, pv progress, verify))
 
 There are `--flags` you can use to customize the wipe based on your needs. You can skip methods, use only certain methods, etc. (read on or use with -h).
-
 
 
 # TL;DR (What it does):
@@ -211,24 +208,24 @@ sudo bash ./afdw.sh --device /dev/sdX --skip-wipe
 
 Targeting & Safety
 
---device /dev/sdX — pick a device explicitly (required for non-interactive).\
---non-interactive --erase-confirm ERASE — batch mode (token is *CASE SENSITIVE*).\
---genius — allow operating on the system/root disk (dangerous; default is refuse).\
+--device /dev/sdX — pick a device explicitly (required for non-interactive).
+--non-interactive --erase-confirm ERASE — batch mode (token is *CASE SENSITIVE*).
+--genius — allow operating on the system/root disk (dangerous; default is refuse).
 
 Wipe/Format Behavior
 
---noise-only — run only the high-entropy fill; skip zero and format.\
---zero-only — run only a single zero pass; skip noise and format.\
---skip-wipe — skip wipe passes; do partition + exFAT + verify.\
---fast — if DISCARD is unsupported, automatically skip the noise pass.\
---no-format — don’t create a partition or filesystem.\
---gpt — use a GPT table instead of MBR (msdos).\
---label RANDOM|CUSTOM — label mode (default RANDOM).\
---label-text "NAME1234" — with CUSTOM, sets the exact label (A–Z/0–9, up to 11 chars; upcased).\
---strict — if verification fails, exit 2 (otherwise it reports and continues).\
---no-poweroff — skip `udisksctl power-off` at the end.\
---dry-run — print what would run; don’t touch the device.\
---no-color — disable ANSI colors.\
+--noise-only — run only the high-entropy fill; skip zero and format.
+--zero-only — run only a single zero pass; skip noise and format.
+--skip-wipe — skip wipe passes; do partition + exFAT + verify.
+--fast — if DISCARD is unsupported, automatically skip the noise pass.
+--no-format — don’t create a partition or filesystem.
+--gpt — use a GPT table instead of MBR (msdos).
+--label RANDOM|CUSTOM — label mode (default RANDOM).
+--label-text "NAME1234" — with CUSTOM, sets the exact label (A–Z/0–9, up to 11 chars; upcased).
+--strict — if verification fails, exit 2 (otherwise it reports and continues).
+--no-poweroff — skip `udisksctl power-off` at the end.
+--dry-run — print what would run; don’t touch the device.
+--no-color — disable ANSI colors.
 -h, --help — show usage.
 
 
